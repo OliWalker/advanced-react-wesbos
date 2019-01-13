@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const { randomBytes } = require('crypto');
 const { promisify } = require('util');
 const { transport, makeANiceEmail } = require('../mail');
+const { hasPermission } = require('../utils')
+
 
 const Mutations = {
   async createItem(parent, args, ctx, info) {
@@ -38,8 +40,13 @@ const Mutations = {
   async deleteItem(parent, args, ctx, info) {
     const where = { id: args.id };
     //1 find item
-    const item = await ctx.db.query.item({ where }, `{id, title}`);
+    const item = await ctx.db.query.item({ where }, `{id, title, user}`);
     //2 check perms
+    const ownsItem = item.user.id === ctx.request.userId;
+    const hasPerms = ctx.request.user.permissions.some(perm => ['ADMIN', 'DELETE'].includes(perm))
+
+    if (!ownsItem && !hasPerms) throw new Error('You are not allowed')
+
     //TODO
     //3 delete it
     return ctx.db.mutation.deleteItem({ where }, info);
@@ -176,6 +183,30 @@ const Mutations = {
     //set as cookie
 
     //return new user
+  },
+  async updatePermissions(parent, args, ctx, info) {
+    if (!ctx.request.userId) {
+      throw new Error('You must be logged in!')
+    }
+    const currentUser = await ctx.db.query.user({
+      where: {
+        id: ctx.request.user.id
+      },
+    info
+    })
+    console.log("CURRENT USER",currentUser)
+    hasPermission(ctx.request.user, ['ADMIN', 'PERMISSIONUPDATE'])
+
+    return ctx.db.mutation.updateUser({
+      data: {
+        permissions: {
+          set: args.permissions
+        }
+      },
+      where: {
+        id: args.userId
+      },
+    }, info)
   }
 };
 
