@@ -5,13 +5,7 @@ type SuccessMessage {
 }
 
 type Mutation {
-  createItem(
-    title: String
-    description: String
-    price: Int
-    image: String
-    largeImage: String
-  ): Item!
+  createItem(title: String, description: String, price: Int, image: String, largeImage: String): Item!
   updateItem(id: ID!, title: String, description: String, price: Int): Item!
   deleteItem(id: ID!): Item
   signup(email: String!, password: String!, name: String!): User!
@@ -25,6 +19,8 @@ type Mutation {
   ): User!,
   updatePermissions(permissions: [Permission], userId: ID!)
   : User
+  addToCart(id: ID!): CartItem
+  removeFromCart(id: ID!): CartItem!
 }
 
 type Query {
@@ -45,4 +41,5 @@ type User {
   name: String!
   email: String!
   permissions: [Permission!]!
+  cart: [CartItem!]!
 }

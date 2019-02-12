@@ -8,39 +8,34 @@ const { hasPermission } = require('../utils')
 
 const Mutations = {
   async createItem(parent, args, ctx, info) {
-    //TODO: check if logged in
+    if (!ctx.request.userId) {
+      throw new Error('You must be logged in to do that!');
+    }
+
     const item = await ctx.db.mutation.createItem(
       {
         data: {
-          ...args
-        }
+          // This is how to create a relationship between the Item and the User
+          user: {
+            connect: {
+              id: ctx.request.userId,
+            },
+          },
+          ...args,
+        },
       },
       info
     );
-    return item;
-  },
 
-  updateItem(parent, args, ctx, info) {
-    //take copy of update
-    const updates = { ...args };
-    //remove id
-    delete updates.id;
-    //run update
-    return ctx.db.mutation.updateItem(
-      {
-        data: updates,
-        where: {
-          id: args.id
-        }
-      },
-      info
-    );
+    console.log(item);
+
+    return item;
   },
 
   async deleteItem(parent, args, ctx, info) {
     const where = { id: args.id };
     //1 find item
-    const item = await ctx.db.query.item({ where }, `{id, title, user}`);
+    const item = await ctx.db.query.item({ where }, `{ id title user { id }}`);
     //2 check perms
     const ownsItem = item.user.id === ctx.request.userId;
     const hasPerms = ctx.request.user.permissions.some(perm => ['ADMIN', 'DELETE'].includes(perm))
@@ -207,6 +202,67 @@ const Mutations = {
         id: args.userId
       },
     }, info)
+  },
+
+  async addToCart(parent, args, ctx, info) {
+    //make sure signed in
+    const {userId} = ctx.request
+    if (!userId) throw new error('must be signed in!')
+
+    //query current cart
+    const [existingCartItem] = await ctx.db.query.cartItems({
+      where: {
+        user: {id : userId},
+        item: {id: args.id},
+      }
+    })
+
+
+    //check if item is there and inc
+    if (existingCartItem) {
+      console.log('alreadyincar');
+      return ctx.db.mutation.updateCartItem(
+        {
+          where: { id: existingCartItem.id },
+          data: { quantity: existingCartItem.quantity + 1 },
+        },
+        info
+      );
+    }
+
+    // if not, create new item
+    return ctx.db.mutation.createCartItem({
+      data: {
+        user: {
+          connect: {id: userId}
+        },
+        item: {
+          connect: { id: args.id}
+        }
+      }
+    },
+    info)
+  },
+
+  async removeFromCart (parent, args, ctx, info) {
+    //find item
+    const cartItem = await ctx.db.query.cartItem({
+      where: {
+        id: args.id
+      }
+    }, `{id, user {id}}`)
+    // make sure we find it
+    if (!cartItem) throw new Error('No Cart Item Found!')
+    //check they own it
+    if (cartItem.user.id !== ctx.request.userId) {
+      throw new Error('Not yours brah')
+    }
+    return ctx.db.mutation.deleteCartItem({
+      where: {
+        id: args.id
+      }
+    }, info)
+    //delete that item
   }
 };
 
